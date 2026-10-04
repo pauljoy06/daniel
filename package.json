@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": { "codeviz": "bin/codeviz" },
   "packageManager": "pnpm@10.18.3",
   "engines": { "node": ">=22" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:nvim": "nvim --headless -u NONE -l nvim/tests/integration.lua",
+    "test": "tsc -p tsconfig.json && vitest run",
+    "test:nvim": "tsc -p tsconfig.json && nvim --headless -u NONE -l nvim/tests/integration.lua",
     "codeviz": "node dist/cli/index.js"
   },
   "dependencies": { "typescript": "^5.9.3" },

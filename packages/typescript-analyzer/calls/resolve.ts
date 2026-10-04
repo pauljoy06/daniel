@@ -14,6 +14,11 @@ export function resolveCall(checker: ts.TypeChecker, call: ts.CallExpression | t
     ? call.expression.name : call.expression);
   if (symbol?.flags && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
   const declarations = symbol?.getDeclarations() ?? [];
+  if (declarations.some(d => ts.isVariableDeclaration(d) && ts.isVariableDeclarationList(d.parent)
+      && !(d.parent.flags & ts.NodeFlags.Const))) {
+    result.reason = 'Mutable function binding has no guaranteed static implementation';
+    return result;
+  }
   const candidates = declarations.flatMap(declaration => {
     if (isExecutableFunction(declaration) && declaration.body) return [declaration];
     if ((ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration)

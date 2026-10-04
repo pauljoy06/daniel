@@ -34,9 +34,9 @@ export class CfgBuilder {
       this.edge(ret, exit, 'return');
       first = this.expression(body, ret, context);
     }
-    if (this.fn.parameters.some(p => p.initializer)) {
-      first = this.unsupported(this.fn.parameters.find(p => p.initializer)!, first, context,
-        'Parameter default evaluation is opaque in V1');
+    if (this.fn.parameters.some(p => p.initializer || !ts.isIdentifier(p.name))) {
+      first = this.unsupported(this.fn.parameters.find(p => p.initializer || !ts.isIdentifier(p.name))!, first, context,
+        'Parameter defaults and destructuring evaluation are opaque in V1');
     }
     this.edge(entry, first);
     // Remove dead code constructed after an unconditional abrupt completion.
@@ -74,6 +74,7 @@ export class CfgBuilder {
     if (!seen.has(exit)) ordered.push(exit);
     const ranks = new Map(ordered.map((id, i) => [id, i]));
     this.model.nodes.sort((a, b) => ranks.get(a.id)! - ranks.get(b.id)!);
+    this.model.calls.sort((a, b) => ranks.get(a.nodeId)! - ranks.get(b.nodeId)!);
     return this.model;
   }
 
@@ -104,6 +105,7 @@ export class CfgBuilder {
 
   private requiresFlow(ast: ts.Node): boolean {
     if (isExecutableFunction(ast)) return false;
+    if (ts.isVariableDeclaration(ast) && !ts.isIdentifier(ast.name)) return true;
     if (ts.isCallExpression(ast) || ts.isNewExpression(ast) || ts.isConditionalExpression(ast)
       || ts.isAwaitExpression(ast) || ts.isYieldExpression(ast) || ts.isTaggedTemplateExpression(ast)
       || ts.isSpreadElement(ast) || ts.isSpreadAssignment(ast)
@@ -122,7 +124,7 @@ export class CfgBuilder {
     return (ts.isVariableStatement(stmt) || ts.isExpressionStatement(stmt)
       || ts.isFunctionDeclaration(stmt) || ts.isEmptyStatement(stmt) || ts.isDebuggerStatement(stmt))
       && !this.requiresFlow(stmt)
-      && !(ts.isVariableStatement(stmt) && (stmt.declarationList.flags & (ts.NodeFlags.Using | ts.NodeFlags.AwaitUsing)));
+      && !(ts.isVariableStatement(stmt) && (stmt.declarationList.flags & ts.NodeFlags.Using));
   }
 
   private basic(statements: readonly ts.Statement[], next: string, ctx: Context): string {
@@ -177,29 +179,31 @@ export class CfgBuilder {
       return id;
     }
     if (ts.isWhileStatement(stmt) || ts.isDoStatement(stmt)) {
-      const loop = this.node('loop', stmt.expression, stmt.expression.getText());
-      const test = this.expression(stmt.expression, loop, ctx);
-      const body = this.statement(stmt.statement, test, { ...ctx, breakTo: next, continueTo: test });
-      this.edge(loop, body, 'true');
-      this.edge(loop, next, 'false');
-      this.exceptional(loop, ctx);
-      return ts.isDoStatement(stmt) ? body : test;
+      const loop = this.node('loop', stmt.expression, `${ts.isDoStatement(stmt) ? 'do/while' : 'while'} ${stmt.expression.getText()}`, true);
+      const back = this.node('basicBlock', stmt.expression, 'loop back', true);
+      this.edge(back, loop, 'back');
+      const body = this.statement(stmt.statement, back, { ...ctx, breakTo: next, continueTo: loop });
+      const test = this.condition(stmt.expression, body, next, ctx);
+      this.edge(loop, test);
+      return ts.isDoStatement(stmt) ? body : loop;
     }
     if (ts.isForStatement(stmt)) {
-      const loop = this.node('loop', stmt.condition ?? stmt, stmt.condition?.getText() ?? 'true (for (;;) loop)');
-      const test = stmt.condition ? this.expression(stmt.condition, loop, ctx) : loop;
-      let update = test;
-      if (stmt.incrementor) update = this.operation(stmt.incrementor, test, ctx, 'loop update');
+      const loop = this.node('loop', stmt.condition ?? stmt, stmt.condition?.getText() ?? 'true (for (;;) loop)', true);
+      const back = this.node('basicBlock', stmt.incrementor ?? stmt, 'loop back', true);
+      this.edge(back, loop, 'back');
+      let update = back;
+      if (stmt.incrementor) update = this.operation(stmt.incrementor, back, ctx, 'loop update');
       const body = this.statement(stmt.statement, update, { ...ctx, breakTo: next, continueTo: update });
-      this.edge(loop, body, 'true');
-      if (stmt.condition) this.edge(loop, next, 'false');
-      this.exceptional(loop, ctx);
-      return stmt.initializer ? this.operation(stmt.initializer, test, ctx, 'loop initializer') : test;
+      const test = stmt.condition ? this.condition(stmt.condition, body, next, ctx) : body;
+      this.edge(loop, test);
+      return stmt.initializer ? this.operation(stmt.initializer, loop, ctx, 'loop initializer') : loop;
     }
     if (ts.isForOfStatement(stmt) || ts.isForInStatement(stmt)) {
       const loop = this.node('loop', stmt, `next ${ts.isForOfStatement(stmt) ? 'value' : 'key'} in ${stmt.expression.getText()}`);
       const binding = this.node('basicBlock', stmt.initializer, `bind ${stmt.initializer.getText()}`);
-      const body = this.statement(stmt.statement, loop, { ...ctx, breakTo: next, continueTo: loop });
+      const back = this.node('basicBlock', stmt, 'loop back', true);
+      this.edge(back, loop, 'back');
+      const body = this.statement(stmt.statement, back, { ...ctx, breakTo: next, continueTo: loop });
       this.edge(binding, body);
       this.exceptional(binding, ctx);
       this.edge(loop, binding, 'true', 'has next');
@@ -214,7 +218,7 @@ export class CfgBuilder {
     if (ts.isSwitchStatement(stmt)) return this.switchStatement(stmt, next, ctx);
     if (ts.isTryStatement(stmt)) return this.tryStatement(stmt, next, ctx);
     if (ts.isVariableStatement(stmt)) {
-      if (stmt.declarationList.flags & (ts.NodeFlags.Using | ts.NodeFlags.AwaitUsing)) {
+      if (stmt.declarationList.flags & ts.NodeFlags.Using) {
         return this.unsupported(stmt, next, ctx, 'Resource disposal (using/await using) is not modeled');
       }
       return this.operation(stmt, next, ctx);
@@ -227,6 +231,8 @@ export class CfgBuilder {
   private condition(expr: ts.Expression, yes: string, no: string, ctx: Context): string {
     // Preserve predicate outcomes across short-circuit evaluation, not just call order.
     if (ts.isParenthesizedExpression(expr)) return this.condition(expr.expression, yes, no, ctx);
+    if (ts.isAsExpression(expr) || ts.isTypeAssertionExpression(expr) || ts.isNonNullExpression(expr)
+      || ts.isSatisfiesExpression(expr)) return this.condition(expr.expression, yes, no, ctx);
     if (ts.isPrefixUnaryExpression(expr) && expr.operator === ts.SyntaxKind.ExclamationToken) {
       return this.condition(expr.operand, no, yes, ctx);
     }
@@ -261,7 +267,7 @@ export class CfgBuilder {
 
   private operation(ast: ts.Node, next: string, ctx: Context, prefix?: string): string {
     // A bare call already has an exact semantic node, so do not duplicate it as a basic block.
-    if (ts.isCallExpression(ast) || ts.isNewExpression(ast)) return this.expression(ast, next, ctx);
+    if (ts.isCallExpression(ast) || ts.isNewExpression(ast) || ts.isAwaitExpression(ast)) return this.expression(ast, next, ctx);
     const id = this.node('basicBlock', ast, prefix ? `${prefix}: ${ast.getText()}` : ast.getText());
     this.edge(id, next);
     this.exceptional(id, ctx);
@@ -270,6 +276,10 @@ export class CfgBuilder {
 
   private expression(ast: ts.Node, next: string, ctx: Context): string {
     if (isExecutableFunction(ast)) return next;
+    if (ts.isVariableDeclaration(ast) && !ts.isIdentifier(ast.name)) {
+      const binding = this.unsupported(ast.name, next, ctx, 'Destructuring defaults and binding side effects are opaque in V1');
+      return ast.initializer ? this.expression(ast.initializer, binding, ctx) : binding;
+    }
     if (ts.isClassExpression(ast) || ts.isTaggedTemplateExpression(ast) || ts.isYieldExpression(ast)
       || ts.isSpreadElement(ast) || ts.isSpreadAssignment(ast)) {
       return this.unsupported(ast, next, ctx, `Expression ${ts.SyntaxKind[ast.kind]} is opaque in V1`);
@@ -289,11 +299,12 @@ export class CfgBuilder {
         return this.unsupported(ast, next, ctx, 'Logical assignment side effects are opaque in V1');
       }
       const right = this.expression(ast.right, next, ctx);
+      if (kind === ts.SyntaxKind.AmpersandAmpersandToken) return this.condition(ast.left, right, next, ctx);
+      if (kind === ts.SyntaxKind.BarBarToken) return this.condition(ast.left, next, right, ctx);
       const id = this.node('condition', ast.left, kind === ts.SyntaxKind.QuestionQuestionToken
         ? `${ast.left.getText()} is nullish?` : ast.left.getText());
-      const rightOnTrue = kind !== ts.SyntaxKind.BarBarToken;
-      this.edge(id, rightOnTrue ? right : next, 'true');
-      this.edge(id, rightOnTrue ? next : right, 'false');
+      this.edge(id, right, 'true');
+      this.edge(id, next, 'false');
       return this.expression(ast.left, id, ctx);
     }
     if (ts.isCallExpression(ast) || ts.isNewExpression(ast)) {
