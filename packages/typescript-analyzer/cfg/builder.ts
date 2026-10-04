@@ -104,9 +104,13 @@ export class CfgBuilder {
   }
 
   private requiresFlow(ast: ts.Node): boolean {
-    if (isExecutableFunction(ast)) return false;
+    if (isExecutableFunction(ast)) {
+      return !!(ast.name && ts.isComputedPropertyName(ast.name) && this.requiresFlow(ast.name.expression));
+    }
     if (ts.isVariableDeclaration(ast) && !ts.isIdentifier(ast.name)) return true;
-    if (ts.isCallExpression(ast) || ts.isNewExpression(ast) || ts.isConditionalExpression(ast)
+    if (ts.isBinaryExpression(ast) && ast.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && (ts.isObjectLiteralExpression(ast.left) || ts.isArrayLiteralExpression(ast.left))) return true;
+    if (ts.isClassExpression(ast) || ts.isCallExpression(ast) || ts.isNewExpression(ast) || ts.isConditionalExpression(ast)
       || ts.isAwaitExpression(ast) || ts.isYieldExpression(ast) || ts.isTaggedTemplateExpression(ast)
       || ts.isSpreadElement(ast) || ts.isSpreadAssignment(ast)
       || !!(ast.flags & ts.NodeFlags.OptionalChain)) return true;
@@ -206,7 +210,10 @@ export class CfgBuilder {
       const body = this.statement(stmt.statement, back, { ...ctx, breakTo: next, continueTo: loop });
       this.edge(binding, body);
       this.exceptional(binding, ctx);
-      this.edge(loop, binding, 'true', 'has next');
+      const bind = ts.isObjectLiteralExpression(stmt.initializer) || ts.isArrayLiteralExpression(stmt.initializer)
+        ? this.unsupported(stmt.initializer, binding, ctx, 'Destructuring assignment bindings are opaque in V1')
+        : this.expression(stmt.initializer, binding, ctx);
+      this.edge(loop, bind, 'true', 'has next');
       this.edge(loop, next, 'false', 'done');
       this.exceptional(loop, ctx);
       this.model.nodes.find(n => n.id === loop)!.detail = 'Iterator/enumerator protocol is opaque; iterator closing is not expanded';
@@ -275,10 +282,22 @@ export class CfgBuilder {
   }
 
   private expression(ast: ts.Node, next: string, ctx: Context): string {
-    if (isExecutableFunction(ast)) return next;
+    if (isExecutableFunction(ast)) {
+      // Object method/accessor names execute at construction, but their bodies do not.
+      return ast.name && ts.isComputedPropertyName(ast.name)
+        ? this.expression(ast.name.expression, next, ctx) : next;
+    }
+    if (ts.isVariableDeclarationList(ast) && (ast.flags & ts.NodeFlags.Using)) {
+      return this.unsupported(ast, next, ctx, 'Resource disposal (using/await using) is not modeled');
+    }
     if (ts.isVariableDeclaration(ast) && !ts.isIdentifier(ast.name)) {
       const binding = this.unsupported(ast.name, next, ctx, 'Destructuring defaults and binding side effects are opaque in V1');
       return ast.initializer ? this.expression(ast.initializer, binding, ctx) : binding;
+    }
+    if (ts.isBinaryExpression(ast) && ast.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && (ts.isObjectLiteralExpression(ast.left) || ts.isArrayLiteralExpression(ast.left))) {
+      const binding = this.unsupported(ast.left, next, ctx, 'Destructuring assignment defaults and side effects are opaque in V1');
+      return this.expression(ast.right, binding, ctx);
     }
     if (ts.isClassExpression(ast) || ts.isTaggedTemplateExpression(ast) || ts.isYieldExpression(ast)
       || ts.isSpreadElement(ast) || ts.isSpreadAssignment(ast)) {

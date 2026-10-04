@@ -41,6 +41,9 @@ analyzer command is:
 :CodeVizExportMermaid [file]
     Request `exportMermaid` using the same source snapshot and analyzer model.
     With no file, open a nofile Mermaid buffer. Existing files are not overwritten.
+    Destinations are fixed at invocation and created exclusively. Exporting a
+    different source does not rebind an open graph. Obsolete export responses,
+    including callbacks arriving after close, are ignored.
 
 ===============================================================================
 4. Graph mappings                                         *codeviz-mappings*
@@ -58,6 +61,9 @@ Moving the cursor in the source buffer highlights the smallest matching real
 (non-synthetic) node in the graph. Source columns are converted between
 Neovim byte offsets and the analyzer's one-based UTF-16 columns.
 Navigation is blocked after source edits until the graph is refreshed.
+This includes imported-definition jumps. Unsaved external target buffers must
+be saved before navigating with disk-derived positions. Closing wipes the
+graph buffer even when it is shown in duplicate windows.
 
 ===============================================================================
 5. Protocol                                                *codeviz-protocol*

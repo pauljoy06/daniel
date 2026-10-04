@@ -14,6 +14,15 @@ export function resolveCall(checker: ts.TypeChecker, call: ts.CallExpression | t
     ? call.expression.name : call.expression);
   if (symbol?.flags && symbol.flags & ts.SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
   const declarations = symbol?.getDeclarations() ?? [];
+  if (declarations.length && declarations.every(d => d.getSourceFile().isDeclarationFile)) {
+    result.resolution = 'external';
+    result.reason = 'Only type declarations are available, not an implementation';
+    return result;
+  }
+  if (declarations.some(d => ts.isGetAccessorDeclaration(d) || ts.isSetAccessorDeclaration(d))) {
+    result.reason = 'Accessor result is not a statically unique callable implementation';
+    return result;
+  }
   if (declarations.some(d => ts.isVariableDeclaration(d) && ts.isVariableDeclarationList(d.parent)
       && !(d.parent.flags & ts.NodeFlags.Const))) {
     result.reason = 'Mutable function binding has no guaranteed static implementation';
@@ -36,22 +45,25 @@ export function resolveCall(checker: ts.TypeChecker, call: ts.CallExpression | t
     return result;
   }
   if (candidates.length === 1) {
-    if (ts.isMethodDeclaration(candidates[0]) && !candidates[0].modifiers?.some(m =>
-      m.kind === ts.SyntaxKind.StaticKeyword) && ts.isPropertyAccessExpression(call.expression)) {
-      const receiver = checker.getSymbolAtLocation(call.expression.expression);
+    const candidate = candidates[0];
+    const declaration = ts.isPropertyDeclaration(candidate.parent) || ts.isPropertyAssignment(candidate.parent)
+      ? candidate.parent : candidate;
+    if (ts.isPropertyAccessExpression(call.expression)
+      && (ts.isMethodDeclaration(declaration) || ts.isPropertyDeclaration(declaration) || ts.isPropertyAssignment(declaration))) {
+      const isStatic = (ts.isMethodDeclaration(declaration) || ts.isPropertyDeclaration(declaration))
+        && declaration.modifiers?.some(m => m.kind === ts.SyntaxKind.StaticKeyword);
+      let receiver = checker.getSymbolAtLocation(call.expression.expression);
+      if (receiver && receiver.flags & ts.SymbolFlags.Alias) receiver = checker.getAliasedSymbol(receiver);
       const isObjectLiteral = receiver?.valueDeclaration && ts.isVariableDeclaration(receiver.valueDeclaration)
         && receiver.valueDeclaration.initializer && ts.isObjectLiteralExpression(receiver.valueDeclaration.initializer)
         && !!(receiver.valueDeclaration.parent.flags & ts.NodeFlags.Const);
-      if (!isObjectLiteral) {
-        result.reason = 'Instance method declaration is known, but runtime dispatch can vary';
+      if (!isStatic && !isObjectLiteral) {
+        result.reason = 'Instance or mutable-object member is known, but runtime receiver dispatch can vary';
         return result;
       }
     }
     result.resolution = 'resolved';
     result.target = functionInfo(candidates[0]);
-  } else if (declarations.length && declarations.every(d => d.getSourceFile().isDeclarationFile)) {
-    result.resolution = 'external';
-    result.reason = 'Only type declarations are available, not an implementation';
   } else {
     result.reason = candidates.length > 1 ? 'Multiple possible implementations' : 'No statically unique implementation';
   }

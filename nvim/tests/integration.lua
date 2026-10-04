@@ -124,5 +124,72 @@ press('q')
 wait_for(function() return state.client == nil end, 'close did not stop and clear the analyzer client')
 if vim.api.nvim_buf_is_valid(graph_buf) then fail('close did not wipe the graph buffer') end
 
+-- Exercise the same native workflow against an actual TSX file and imported calls.
+local tsx = root .. '/fixtures/react/control.tsx'
+vim.cmd('hide edit ' .. vim.fn.fnameescape(tsx))
+local tsx_buf = vim.api.nvim_get_current_buf()
+vim.api.nvim_win_set_cursor(0, { 15, 2 })
+codeviz.setup({ timeout = 12000, keymap = '<leader>vf' })
+press((vim.g.mapleader or '\\') .. 'vf')
+wait_for(function() return state.model and state.model.entryFunction.name == 'renderControl' end,
+  'mapped flow command did not analyze TSX')
+local imported
+for _, call in ipairs(state.model.calls) do if call.name == 'helper' then imported = call end end
+if not imported or imported.resolution ~= 'resolved' then fail('TSX imported call was not resolved') end
+vim.api.nvim_win_set_cursor(state.graph_win, { state.node_lines[imported.nodeId] + 1, 0 })
+press('gd')
+if vim.api.nvim_buf_get_name(0) ~= imported.target.source.file then fail('gd did not jump to imported definition') end
+if vim.api.nvim_win_get_cursor(0)[1] ~= imported.target.source.startLine then fail('gd jumped to wrong definition line') end
+
+-- Exporting this other source must leave the existing TSX graph attached to TSX.
+local scratch = (vim.env.JCODE_SCRATCH_DIR or vim.fn.stdpath('cache'))
+local export = scratch .. '/codeviz-acceptance-' .. vim.fn.getpid() .. '.mmd'
+vim.api.nvim_win_set_cursor(0, { 1, 19 })
+vim.cmd('CodeVizExportMermaid ' .. vim.fn.fnameescape(export))
+wait_for(function() return vim.fn.filereadable(export) == 1 end, 'real Mermaid export did not create its file')
+if state.source_buf ~= tsx_buf then fail('source export rebound the TSX graph') end
+local exported = table.concat(vim.fn.readfile(export), '\n')
+if not exported:find('flowchart TD', 1, true) then fail('export file lacks Mermaid graph') end
+-- A real existing file is preserved, even when a second export finishes.
+vim.fn.writefile({ 'preserve-existing-export' }, export)
+local export_id = state.client.next_id
+vim.cmd('CodeVizExportMermaid ' .. vim.fn.fnameescape(export))
+wait_for(function() return state.client.pending[export_id] == nil end, 'second export response did not finish')
+vim.wait(50)
+if table.concat(vim.fn.readfile(export), '\n') ~= 'preserve-existing-export' then fail('export overwrote an existing file') end
+vim.fn.delete(export)
+
+vim.api.nvim_set_current_win(state.graph_win)
+vim.api.nvim_win_set_cursor(0, { state.node_lines[imported.nodeId] + 1, 0 })
+press('K')
+local details
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+  if vim.api.nvim_win_get_config(win).relative ~= '' then
+    details = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), '\n')
+    vim.api.nvim_win_close(win, true)
+    break
+  end
+end
+if not details or not details:find('Call: resolved', 1, true) then fail('K did not show call analysis details') end
+
+local references, original_references = 0, vim.lsp.buf.references
+vim.lsp.buf.references = function() references = references + 1 end
+press('gr')
+vim.lsp.buf.references = original_references
+if references ~= 1 or vim.api.nvim_get_current_buf() ~= tsx_buf then fail('gr did not route through source navigation') end
+
+-- Imported gd must also be blocked after the analyzed TSX source changes.
+vim.api.nvim_buf_set_lines(tsx_buf, 14, 15, false, { '  formatTitle(title);' })
+vim.api.nvim_set_current_win(state.graph_win)
+vim.api.nvim_win_set_cursor(0, { state.node_lines[imported.nodeId] + 1, 0 })
+press('gd')
+if vim.api.nvim_get_current_buf() ~= state.graph_buf then fail('stale imported gd navigated') end
+
+graph_buf = state.graph_buf
+vim.cmd('split')
+press('q')
+wait_for(function() return state.client == nil end, 'duplicate-window close did not stop analyzer')
+if vim.api.nvim_buf_is_valid(graph_buf) then fail('duplicate-window close retained graph buffer') end
+
 print('codeviz integration: ok')
 vim.cmd('qa!')

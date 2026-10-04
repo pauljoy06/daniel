@@ -36,13 +36,15 @@ local function current_node()
   return node_by_id(state.line_nodes[vim.api.nvim_win_get_cursor(0)[1] - 1])
 end
 
-local function source_params()
-  local buf = state.source_buf
+local function source_params(buf, cursor)
+  buf = buf or state.source_buf
   if not buf or not vim.api.nvim_buf_is_valid(buf) then return nil, 'source buffer is no longer valid' end
   local name = vim.api.nvim_buf_get_name(buf)
   if name == '' then return nil, 'source buffer must have a file name' end
-  local cursor = vim.api.nvim_win_get_cursor(vim.fn.bufwinid(buf) ~= -1 and vim.fn.bufwinid(buf) or 0)
-  if vim.api.nvim_get_current_buf() ~= buf then cursor = state.source_cursor or { 1, 0 } end
+  if not cursor then
+    cursor = vim.api.nvim_get_current_buf() == buf and vim.api.nvim_win_get_cursor(0)
+      or state.source_cursor or { 1, 0 }
+  end
   local line = vim.api.nvim_buf_get_lines(buf, cursor[1] - 1, cursor[1], false)[1] or ''
   local params = {
     file = vim.fn.fnamemodify(name, ':p'),
@@ -67,14 +69,17 @@ end
 
 local function jump_source(location)
   if not location then return false end
-  if state.source_buf and vim.api.nvim_buf_is_valid(state.source_buf)
-    and location.file == vim.api.nvim_buf_get_name(state.source_buf)
-    and state.analyzed_tick ~= vim.api.nvim_buf_get_changedtick(state.source_buf) then
+  if not state.source_buf or not vim.api.nvim_buf_is_valid(state.source_buf)
+    or state.analyzed_tick ~= vim.api.nvim_buf_get_changedtick(state.source_buf) then
     util.notify('source changed; press r in the graph to refresh before navigating', vim.log.levels.WARN)
     return false
   end
   local target = vim.fn.bufnr(location.file)
   if target < 0 then target = vim.fn.bufadd(location.file); vim.fn.bufload(target) end
+  if target ~= state.source_buf and vim.bo[target].modified then
+    util.notify('target has unsaved edits; save and refresh before navigating', vim.log.levels.WARN)
+    return false
+  end
   local win = vim.fn.bufwinid(target)
   if win == -1 then
     if state.graph_win and vim.api.nvim_win_is_valid(state.graph_win) then vim.api.nvim_set_current_win(state.graph_win) end
@@ -136,7 +141,7 @@ local function set_graph_keymaps(buf)
   end)
   map('gd', function()
     local node = current_node()
-    for _, call in ipairs(state.model.calls or {}) do
+    for _, call in ipairs((state.model and state.model.calls) or {}) do
       if call.nodeId == (node and node.id) and call.resolution == 'resolved' and call.target then
         jump_source(call.target.source); return
       end
@@ -199,7 +204,7 @@ function M.refresh()
   local source_buf = state.source_buf
   local tick = vim.api.nvim_buf_get_changedtick(source_buf)
   client():request('analyze', params, function(request_err, model)
-    if generation ~= state.generation then return end
+    if generation ~= state.generation or source_buf ~= state.source_buf then return end
     if not vim.api.nvim_buf_is_valid(source_buf) or vim.api.nvim_buf_get_changedtick(source_buf) ~= tick then
       util.notify('source changed while analyzing; refresh to analyze the current buffer', vim.log.levels.WARN)
       return
@@ -216,6 +221,7 @@ end
 function M.open()
   local buf = vim.api.nvim_get_current_buf()
   if vim.bo[buf].buftype ~= '' then util.notify('open CodeViz from a source buffer', vim.log.levels.ERROR); return end
+  if state.source_buf and state.source_buf ~= buf then M.close() end
   state.source_buf = buf
   state.source_cursor = vim.api.nvim_win_get_cursor(0)
   M.refresh()
@@ -224,18 +230,40 @@ end
 function M.close()
   state.generation = state.generation + 1
   if state.client then state.client:stop(); state.client = nil end
-  if state.graph_win and vim.api.nvim_win_is_valid(state.graph_win) then vim.api.nvim_win_close(state.graph_win, true) end
+  local graph_buf = state.graph_buf
+  if state.graph_win and vim.api.nvim_win_is_valid(state.graph_win) and #vim.api.nvim_list_wins() > 1 then
+    vim.api.nvim_win_close(state.graph_win, true)
+  end
+  -- A graph can be displayed in duplicate windows. Wipe the buffer itself too.
+  if graph_buf and vim.api.nvim_buf_is_valid(graph_buf) then vim.api.nvim_buf_delete(graph_buf, { force = true }) end
   state.graph_buf, state.graph_win, state.model = nil, nil, nil
+  state.line_nodes, state.node_lines, state.analyzed_tick = nil, nil, nil
+  state.source_buf, state.source_cursor = nil, nil
 end
 
 local function present_mermaid(text, path)
   if path and path ~= '' then
-    if vim.fn.filereadable(vim.fn.fnamemodify(path, ':p')) == 1 then
-      util.notify('refusing to overwrite existing export: ' .. path, vim.log.levels.ERROR)
+    local uv = vim.uv or vim.loop
+    local fd, open_err, code = uv.fs_open(path, 'wx', 420)
+    if not fd then
+      util.notify(code == 'EEXIST' and ('refusing to overwrite existing export: ' .. path)
+        or ('cannot create export: ' .. tostring(open_err)), vim.log.levels.ERROR)
       return
     end
-    vim.fn.writefile(vim.split(text, '\n', { plain = true }), vim.fn.fnamemodify(path, ':p'))
-    util.notify('wrote ' .. vim.fn.fnamemodify(path, ':p'))
+    local offset = 0
+    while offset < #text do
+      local written, write_err = uv.fs_write(fd, text:sub(offset + 1), offset)
+      if not written or written == 0 then
+        uv.fs_close(fd)
+        uv.fs_unlink(path)
+        util.notify('cannot write export: ' .. tostring(write_err), vim.log.levels.ERROR)
+        return
+      end
+      offset = offset + written
+    end
+    local closed, close_err = uv.fs_close(fd)
+    if not closed then util.notify('cannot close export: ' .. tostring(close_err), vim.log.levels.ERROR); return end
+    util.notify('wrote ' .. path)
     return
   end
   vim.cmd('botright new')
@@ -247,15 +275,24 @@ local function present_mermaid(text, path)
 end
 
 function M.export_mermaid(path)
+  local buf, cursor = state.source_buf, state.source_cursor
   if vim.bo.buftype == '' then
-    state.source_buf = vim.api.nvim_get_current_buf()
-    state.source_cursor = vim.api.nvim_win_get_cursor(0)
+    buf = vim.api.nvim_get_current_buf()
+    cursor = vim.api.nvim_win_get_cursor(0)
   end
-  local params, err = source_params()
+  local params, err = source_params(buf, cursor)
   if not params then util.notify(err, vim.log.levels.ERROR); return end
+  local generation = state.generation
+  local tick = vim.api.nvim_buf_get_changedtick(buf)
+  path = path and path ~= '' and vim.fn.fnamemodify(path, ':p') or nil
   client():request('exportMermaid', params, function(request_err, result)
+    if generation ~= state.generation then return end
+    if not vim.api.nvim_buf_is_valid(buf) or vim.api.nvim_buf_get_changedtick(buf) ~= tick then
+      util.notify('source changed while exporting; request a fresh export', vim.log.levels.WARN)
+      return
+    end
     local text = type(result) == 'string' and result or type(result) == 'table' and (result.mermaid or result.text)
-    if request_err or not text then
+    if request_err or type(text) ~= 'string' then
       util.notify(request_err or 'no model to export', vim.log.levels.ERROR)
       return
     end

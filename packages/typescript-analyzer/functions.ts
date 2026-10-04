@@ -34,7 +34,9 @@ export function containingFunction(file: ts.SourceFile, line: number, column: nu
     throw new Error('Cursor line and column must be valid one-based integer positions');
   }
   const start = lines[line - 1];
-  const lineEnd = line < lines.length ? lines[line] : file.text.length;
+  let lineEnd = line < lines.length ? lines[line] : file.text.length;
+  // Line terminators are not cursor columns, and must not spill into the next line.
+  while (lineEnd > start && /[\r\n\u2028\u2029]/.test(file.text[lineEnd - 1])) lineEnd--;
   if (start + column - 1 > lineEnd) throw new Error('Cursor column is outside the source line');
   const offset = start + column - 1;
   let result: ExecutableFunction | undefined;

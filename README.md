@@ -6,6 +6,8 @@ Deterministic TypeScript/TSX control-flow analysis with a native Neovim navigati
 
 This repository implements the **V1 single-function flow-view milestone**, plus conservative call-definition resolution and Mermaid export. It is an initial static-analysis tool, not a proof that every displayed path is feasible. Sequence views, bounded recursive call expansion, ELK layout, levels of detail, and floating-node renderers remain later milestones.
 
+See [the original-plan checklist and bug re-verification report](docs/verification.md) for the implemented/deferred task breakdown, repaired defects, test results, and remaining acceptance gaps.
+
 ## Quick start
 
 Requirements: Node.js 22+, pnpm 10, and Neovim 0.10+ for the plugin.
@@ -25,6 +27,8 @@ If pnpm is not installed, use `npx --yes pnpm@10.18.3` in place of `pnpm`. Run t
 ```
 
 The nearest `tsconfig.json` is loaded, including compiler options, imports, and project references. Without a config, a standalone program is created. The compiler's AST and TypeChecker are used directly rather than adding a convenience wrapper. Each request reloads the program so changes on disk are visible. This favors correctness over large-project latency in V1.
+
+For analysis/navigation, referenced implementations are loaded from source rather than substituting declaration outputs. New unsaved files can be analyzed even if the project's configured include currently has no files on disk. Other configuration errors are still rejected.
 
 Coordinates are **one-based UTF-16 columns**, with exclusive end positions. Syntax-invalid files and invalid cursor positions return errors rather than misleading graphs. The innermost implemented function is selected, including arrows, methods, accessors, and constructors.
 
@@ -57,7 +61,11 @@ Restart Neovim after adding the runtime path, or run `:runtime plugin/codeviz.lu
 
 Moving through source code highlights the smallest corresponding non-synthetic graph node. The plugin translates UTF-16 positions into Neovim byte offsets, including non-BMP characters. Unsaved source contents are sent as an in-memory override; analysis never writes source files. Other project files are read from disk. Graph navigation is refused after the source changes until `r` refreshes it, and responses for obsolete snapshots are discarded.
 
+Stale protection also applies to imported-definition jumps. Unsaved edits in a target buffer must be saved before navigating with disk-derived definition coordinates. Switching the analyzed source invalidates the old graph; closing wipes the graph even if it is displayed in multiple windows.
+
 `:CodeVizExportMermaid` opens an export buffer. `:CodeVizExportMermaid path.mmd` writes a new file without overwriting an existing file. Both use the analyzer's same model and deterministic exporter. You may also export directly from a source buffer without first opening a graph.
+
+Exporting another buffer does not change an open graph's source. Destinations are resolved when the command is invoked and created exclusively, including refusal to overwrite symlinks. Closing the graph or editing the export source before the response arrives discards that response.
 
 ## Execution model
 
@@ -119,6 +127,8 @@ pnpm test:nvim
 ```
 
 Analyzer tests assert edges, graph reachability, abrupt completions, evaluation order, determinism, source coordinates, resolution, and explicit unsupported constructs. CLI tests exercise the built executable and malformed/fragmented RPC requests. The headless Neovim test opens a real fixture, invokes the flow command, navigates with `Enter`, checks source-to-graph highlighting, tests Unicode conversion, blocks stale navigation, refreshes unsaved contents, and closes the analyzer.
+
+The editor suite also covers controlled callback/lifecycle races, safe exports, and duplicate windows, followed by a real TypeScript/TSX workflow with imported `gd`, `K`, references routing, and export isolation. The TSX fixture is representative PCF/React-style source, not certification of an actual PCF/React application. References routing uses a stub rather than a real attached LSP.
 
 ```text
 packages/core/                 model and protocol contract
