@@ -47,7 +47,7 @@ require('daniel').setup({
 })
 ```
 
-Restart Neovim after adding the runtime path, or run `:runtime plugin/daniel.lua`. Open a named TypeScript/TSX source buffer, place the cursor inside a function, and run `:DanielFlow` or `<leader>vf`. A vertical `nofile` split shows semantic node cards with labeled outgoing edges and destination IDs. This intentionally simple V1 renderer is a graph adjacency surface, not yet a spatial node-layout canvas.
+Generate the local help index with `:helptags /absolute/path/to/daniel/nvim/doc` so `:help daniel` works. Restart Neovim after adding the runtime path, or run `:runtime plugin/daniel.lua`. Open a named TypeScript/TSX source buffer, place the cursor inside a function, and run `:DanielFlow` or `<leader>vf`. A vertical `nofile` split shows semantic node cards with labeled outgoing edges and destination IDs. This intentionally simple V1 renderer is a graph adjacency surface, not yet a spatial node-layout canvas.
 
 | Key | Action |
 | --- | --- |
