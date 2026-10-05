@@ -3,10 +3,10 @@ import { analyze } from '../packages/typescript-analyzer/index.js';
 import { toMermaid } from '../packages/mermaid-renderer/index.js';
 import { serve } from './server.js';
 
-const usage = `CodeViz: deterministic TypeScript control flow
+const usage = `Daniel: deterministic TypeScript control flow
 
-  codeviz analyze <file>:<line>:<column> [--tsconfig <path>] [--mermaid]
-  codeviz serve
+  daniel analyze <file>:<line>:<column> [--tsconfig <path>] [--mermaid]
+  daniel serve
 
 Coordinates are one-based UTF-16. serve uses JSON-RPC 2.0 newline-delimited JSON.
 `;

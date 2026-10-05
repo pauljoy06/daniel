@@ -33,7 +33,7 @@ describe('conservative call target regressions', () => {
 describe('configured project input regressions', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(path.join(process.env.JCODE_SCRATCH_DIR ?? tmpdir(), 'codeviz-reaudit-project-'));
+    root = mkdtempSync(path.join(process.env.JCODE_SCRATCH_DIR ?? tmpdir(), 'daniel-reaudit-project-'));
   });
   afterEach(() => { rmSync(root, { recursive: true, force: true }); });
   const write = (file: string, text: string): void => {

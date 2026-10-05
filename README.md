@@ -1,4 +1,4 @@
-# CodeViz
+# Daniel
 
 Deterministic TypeScript/TSX control-flow analysis with a native Neovim navigation surface. The analyzer owns semantics and source provenance. Neovim only displays the resulting `ExecutionModel`. No LLM, runtime execution, browser UI, or network service participates in analysis.
 
@@ -15,15 +15,15 @@ Requirements: Node.js 22+, pnpm 10, and Neovim 0.10+ for the plugin.
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
-./bin/codeviz analyze fixtures/conditions/branches.ts:5:3
-./bin/codeviz analyze fixtures/conditions/branches.ts:5:3 --mermaid
+./bin/daniel analyze fixtures/conditions/branches.ts:5:3
+./bin/daniel analyze fixtures/conditions/branches.ts:5:3 --mermaid
 ```
 
 If pnpm is not installed, use `npx --yes pnpm@10.18.3` in place of `pnpm`. Run the analyzer against your actual project:
 
 ```sh
-./bin/codeviz analyze /path/to/project/src/order.ts:52:10
-./bin/codeviz analyze /path/to/project/src/order.ts:52:10 --tsconfig /path/to/project/tsconfig.json
+./bin/daniel analyze /path/to/project/src/order.ts:52:10
+./bin/daniel analyze /path/to/project/src/order.ts:52:10 --tsconfig /path/to/project/tsconfig.json
 ```
 
 The nearest `tsconfig.json` is loaded, including compiler options, imports, and project references. Without a config, a standalone program is created. The compiler's AST and TypeChecker are used directly rather than adding a convenience wrapper. Each request reloads the program so changes on disk are visible. This favors correctness over large-project latency in V1.
@@ -37,17 +37,17 @@ Coordinates are **one-based UTF-16 columns**, with exclusive end positions. Synt
 Add this repository's `nvim/` directory to your runtime path, then configure the plugin in `init.lua`:
 
 ```lua
-vim.opt.runtimepath:prepend('/absolute/path/to/codeviz/nvim')
-require('codeviz').setup({
+vim.opt.runtimepath:prepend('/absolute/path/to/daniel/nvim')
+require('daniel').setup({
   keymap = '<leader>vf',
   timeout = 10000,
   -- Optional: use an explicitly built analyzer from another location.
-  -- command = { 'node', '/absolute/path/to/codeviz/dist/cli/index.js', 'serve' },
+  -- command = { 'node', '/absolute/path/to/daniel/dist/cli/index.js', 'serve' },
   -- tsconfig = '/absolute/path/to/project/tsconfig.json',
 })
 ```
 
-Restart Neovim after adding the runtime path, or run `:runtime plugin/codeviz.lua`. Open a named TypeScript/TSX source buffer, place the cursor inside a function, and run `:CodeVizFlow` or `<leader>vf`. A vertical `nofile` split shows semantic node cards with labeled outgoing edges and destination IDs. This intentionally simple V1 renderer is a graph adjacency surface, not yet a spatial node-layout canvas.
+Restart Neovim after adding the runtime path, or run `:runtime plugin/daniel.lua`. Open a named TypeScript/TSX source buffer, place the cursor inside a function, and run `:DanielFlow` or `<leader>vf`. A vertical `nofile` split shows semantic node cards with labeled outgoing edges and destination IDs. This intentionally simple V1 renderer is a graph adjacency surface, not yet a spatial node-layout canvas.
 
 | Key | Action |
 | --- | --- |
@@ -63,7 +63,7 @@ Moving through source code highlights the smallest corresponding non-synthetic g
 
 Stale protection also applies to imported-definition jumps. Unsaved edits in a target buffer must be saved before navigating with disk-derived definition coordinates. Switching the analyzed source invalidates the old graph; closing wipes the graph even if it is displayed in multiple windows.
 
-`:CodeVizExportMermaid` opens an export buffer. `:CodeVizExportMermaid path.mmd` writes a new file without overwriting an existing file. Both use the analyzer's same model and deterministic exporter. You may also export directly from a source buffer without first opening a graph.
+`:DanielExportMermaid` opens an export buffer. `:DanielExportMermaid path.mmd` writes a new file without overwriting an existing file. Both use the analyzer's same model and deterministic exporter. You may also export directly from a source buffer without first opening a graph.
 
 Exporting another buffer does not change an open graph's source. Destinations are resolved when the command is invoked and created exclusively, including refusal to overwrite symlinks. Closing the graph or editing the export source before the response arrives discards that response.
 
@@ -110,7 +110,7 @@ Every node includes an AST kind and exact source range. Basic blocks preserve th
 
 ## Stdio protocol
 
-Start `./bin/codeviz serve`. Transport is **newline-delimited UTF-8 JSON-RPC 2.0**, not Neovim MessagePack RPC or LSP `Content-Length` framing. Send one request per line:
+Start `./bin/daniel serve`. Transport is **newline-delimited UTF-8 JSON-RPC 2.0**, not Neovim MessagePack RPC or LSP `Content-Length` framing. Send one request per line:
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"analyze","params":{"file":"/project/src/foo.ts","line":52,"column":10}}

@@ -1,9 +1,9 @@
-*codeviz.txt*                 Native CodeViz execution flow viewer
+*daniel.txt*                 Native Daniel execution flow viewer
 
 ===============================================================================
-1. Introduction                                                   *codeviz*
+1. Introduction                                                   *daniel*
 
-CodeViz asks the repository's TypeScript analyzer for an ExecutionModel and
+Daniel asks the repository's TypeScript analyzer for an ExecutionModel and
 shows a textual control-flow graph in a nofile split. Each semantic node shows
 its deterministic node ID, source range, and explicit labeled outgoing edges.
 Node IDs are not persistent across source edits.
@@ -12,14 +12,14 @@ The plugin implements the V1 schema only. It does not provide sequence views,
 interactive graph expansion, or V2 behavior.
 
 ===============================================================================
-2. Setup                                                    *codeviz-setup*
+2. Setup                                                    *daniel-setup*
 
 Add the `nvim` directory to 'runtimepath', then optionally configure:
 >
-  require('codeviz').setup({
+  require('daniel').setup({
     keymap = '<leader>vf',
     timeout = 10000,
-    -- command = { 'node', '/path/to/codeviz/dist/cli/index.js', 'serve' },
+    -- command = { 'node', '/path/to/daniel/dist/cli/index.js', 'serve' },
     -- tsconfig = '/path/to/tsconfig.json',
     -- split = 'botright vnew',
   })
@@ -30,15 +30,15 @@ analyzer command is:
   {'node', repository_root .. '/dist/cli/index.js', 'serve'}
 <
 ===============================================================================
-3. Commands                                                *codeviz-commands*
+3. Commands                                                *daniel-commands*
 
-                                                        *:CodeVizFlow*
-:CodeVizFlow
+                                                        *:DanielFlow*
+:DanielFlow
     Analyze the function under the cursor, including unsaved buffer text, and
     open or refresh the graph split.
 
-                                             *:CodeVizExportMermaid*
-:CodeVizExportMermaid [file]
+                                             *:DanielExportMermaid*
+:DanielExportMermaid [file]
     Request `exportMermaid` using the same source snapshot and analyzer model.
     With no file, open a nofile Mermaid buffer. Existing files are not overwritten.
     Destinations are fixed at invocation and created exclusively. Exporting a
@@ -46,7 +46,7 @@ analyzer command is:
     including callbacks arriving after close, are ignored.
 
 ===============================================================================
-4. Graph mappings                                         *codeviz-mappings*
+4. Graph mappings                                         *daniel-mappings*
 
 <CR>        Jump to the selected node's precise source start.
 <Tab>       Select the next semantic node.
@@ -66,7 +66,7 @@ be saved before navigating with disk-derived positions. Closing wipes the
 graph buffer even when it is shown in duplicate windows.
 
 ===============================================================================
-5. Protocol                                                *codeviz-protocol*
+5. Protocol                                                *daniel-protocol*
 
 The analyzer uses JSON-RPC 2.0 messages separated by newlines over stdio.
 `analyze` receives `{file, line, column, sourceText, tsconfig?}` and returns an

@@ -1,5 +1,5 @@
 local function fail(message)
-  error('codeviz integration: ' .. message, 0)
+  error('daniel integration: ' .. message, 0)
 end
 
 local function wait_for(predicate, message)
@@ -8,13 +8,29 @@ end
 
 local root = vim.fn.getcwd()
 vim.opt.runtimepath:prepend(root .. '/nvim')
-vim.cmd('runtime plugin/codeviz.lua')
+vim.cmd('runtime plugin/daniel.lua')
+for _, command in ipairs({ 'DanielFlow', 'DanielExportMermaid' }) do
+  if vim.fn.exists(':' .. command) ~= 2 then fail('missing command: ' .. command) end
+end
+for _, command in ipairs({ 'CodeVizFlow', 'CodeVizExportMermaid' }) do
+  if vim.fn.exists(':' .. command) ~= 0 then fail('legacy command still exists: ' .. command) end
+end
+for _, suffix in ipairs({ '', '.render', '.rpc', '.util' }) do
+  local name = 'daniel' .. suffix
+  local ok, module = pcall(require, name)
+  if not ok or type(module) ~= 'table' then fail('missing module: ' .. name) end
+end
+for _, suffix in ipairs({ '', '.init', '.render', '.rpc', '.util' }) do
+  local legacy = 'codeviz' .. suffix
+  if pcall(require, legacy) then fail('legacy module still exists: ' .. legacy) end
+end
+if require('daniel.util').root() ~= root then fail('renamed util resolved the wrong repository root') end
 local function press(key)
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, false, true), 'x', false)
 end
 
 -- The transport must tolerate arbitrary stdout chunk boundaries.
-local Client = require('codeviz.rpc')
+local Client = require('daniel.rpc')
 local transport = Client.new({ 'unused' }, 1000)
 local received
 transport.pending[7] = { callback = function(err, result) if err then fail(err) end; received = result end }
@@ -30,7 +46,7 @@ local fixture_model = { entryFunction = { name = 'main', source = source }, node
 }, edges = { { from = 'a', to = 'b', type = 'true' } }, calls = {
   { nodeId = 'b', resolution = 'unresolved', reason = 'dynamic' },
 } }
-local lines, _, positions = require('codeviz.render').build(fixture_model)
+local lines, _, positions = require('daniel.render').build(fixture_model)
 if lines[positions.a + 1] ~= '┌─ ◇ [a] x' then fail('condition renderer changed unexpectedly') end
 local rendered = table.concat(lines, '\n')
 if not rendered:find('(true)→ [b]', 1, true) then fail('renderer lost branch routing') end
@@ -55,16 +71,16 @@ vim.cmd('edit ' .. vim.fn.fnameescape(fixture))
 local source_buf = vim.api.nvim_get_current_buf()
 vim.api.nvim_win_set_cursor(0, { 5, 4 })
 
-local codeviz = require('codeviz')
-codeviz.setup({ timeout = 12000 })
-if codeviz._util.byte_to_utf16('😀 target()', 5) ~= 4 then fail('UTF-8 to UTF-16 conversion failed') end
-if codeviz._util.utf16_to_byte('😀 target()', 4) ~= 5 then fail('UTF-16 to UTF-8 conversion failed') end
-vim.cmd('CodeVizFlow')
+local daniel = require('daniel')
+daniel.setup({ timeout = 12000 })
+if daniel._util.byte_to_utf16('😀 target()', 5) ~= 4 then fail('UTF-8 to UTF-16 conversion failed') end
+if daniel._util.utf16_to_byte('😀 target()', 4) ~= 5 then fail('UTF-16 to UTF-8 conversion failed') end
+vim.cmd('DanielFlow')
 wait_for(function()
-  return codeviz._state.model ~= nil and codeviz._state.graph_buf ~= nil
+  return daniel._state.model ~= nil and daniel._state.graph_buf ~= nil
 end, 'real analyze response did not produce a graph')
 
-local state = codeviz._state
+local state = daniel._state
 if state.model.schemaVersion ~= 1 then fail('unexpected schema version') end
 local graph_text = table.concat(vim.api.nvim_buf_get_lines(state.graph_buf, 0, -1, false), '\n')
 if not graph_text:find('outgoing', 1, true) or not graph_text:find('→', 1, true) then
@@ -93,12 +109,12 @@ wait_for(function() return vim.api.nvim_get_current_buf() == source_buf end, 'En
 local cursor = vim.api.nvim_win_get_cursor(0)
 if cursor[1] ~= jump_node.source.startLine then fail('Enter jumped to wrong source line') end
 local source_line = vim.api.nvim_get_current_line()
-local expected_byte = codeviz._util.utf16_to_byte(source_line, jump_node.source.startColumn)
+local expected_byte = daniel._util.utf16_to_byte(source_line, jump_node.source.startColumn)
 if cursor[2] ~= expected_byte then fail('Enter did not convert UTF-16 column to byte offset') end
 
 vim.api.nvim_win_set_cursor(0, { jump_node.source.startLine, expected_byte })
 vim.cmd('doautocmd CursorMoved')
-local current_ns = vim.api.nvim_get_namespaces()['codeviz-current']
+local current_ns = vim.api.nvim_get_namespaces()['daniel-current']
 local marks = vim.api.nvim_buf_get_extmarks(state.graph_buf, current_ns, 0, -1, {})
 if #marks ~= 1 then fail('source CursorMoved did not highlight one graph node') end
 
@@ -129,7 +145,7 @@ local tsx = root .. '/fixtures/react/control.tsx'
 vim.cmd('hide edit ' .. vim.fn.fnameescape(tsx))
 local tsx_buf = vim.api.nvim_get_current_buf()
 vim.api.nvim_win_set_cursor(0, { 15, 2 })
-codeviz.setup({ timeout = 12000, keymap = '<leader>vf' })
+daniel.setup({ timeout = 12000, keymap = '<leader>vf' })
 press((vim.g.mapleader or '\\') .. 'vf')
 wait_for(function() return state.model and state.model.entryFunction.name == 'renderControl' end,
   'mapped flow command did not analyze TSX')
@@ -143,9 +159,9 @@ if vim.api.nvim_win_get_cursor(0)[1] ~= imported.target.source.startLine then fa
 
 -- Exporting this other source must leave the existing TSX graph attached to TSX.
 local scratch = (vim.env.JCODE_SCRATCH_DIR or vim.fn.stdpath('cache'))
-local export = scratch .. '/codeviz-acceptance-' .. vim.fn.getpid() .. '.mmd'
+local export = scratch .. '/daniel-acceptance-' .. vim.fn.getpid() .. '.mmd'
 vim.api.nvim_win_set_cursor(0, { 1, 19 })
-vim.cmd('CodeVizExportMermaid ' .. vim.fn.fnameescape(export))
+vim.cmd('DanielExportMermaid ' .. vim.fn.fnameescape(export))
 wait_for(function() return vim.fn.filereadable(export) == 1 end, 'real Mermaid export did not create its file')
 if state.source_buf ~= tsx_buf then fail('source export rebound the TSX graph') end
 local exported = table.concat(vim.fn.readfile(export), '\n')
@@ -153,7 +169,7 @@ if not exported:find('flowchart TD', 1, true) then fail('export file lacks Merma
 -- A real existing file is preserved, even when a second export finishes.
 vim.fn.writefile({ 'preserve-existing-export' }, export)
 local export_id = state.client.next_id
-vim.cmd('CodeVizExportMermaid ' .. vim.fn.fnameescape(export))
+vim.cmd('DanielExportMermaid ' .. vim.fn.fnameescape(export))
 wait_for(function() return state.client.pending[export_id] == nil end, 'second export response did not finish')
 vim.wait(50)
 if table.concat(vim.fn.readfile(export), '\n') ~= 'preserve-existing-export' then fail('export overwrote an existing file') end
@@ -191,5 +207,5 @@ press('q')
 wait_for(function() return state.client == nil end, 'duplicate-window close did not stop analyzer')
 if vim.api.nvim_buf_is_valid(graph_buf) then fail('duplicate-window close retained graph buffer') end
 
-print('codeviz integration: ok')
+print('daniel integration: ok')
 vim.cmd('qa!')

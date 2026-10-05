@@ -1,14 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync, spawn } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { toMermaid } from '../packages/mermaid-renderer/index.js';
 import { analyze } from '../packages/typescript-analyzer/index.js';
 
-const cli = path.resolve('dist/cli/index.js');
+const cli = path.resolve('bin/daniel');
 const file = path.resolve('fixtures/conditions/branches.ts');
 const params = { file, line: 5, column: 3 };
 
 describe('built CLI', () => {
+  it('runs the executable directly and advertises Daniel commands', () => {
+    const run = spawnSync(cli, ['--help'], { encoding: 'utf8' });
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toContain('Daniel: deterministic TypeScript control flow');
+    expect(run.stdout).toContain('daniel analyze');
+    expect(run.stdout).toContain('daniel serve');
+    expect(run.stdout).not.toMatch(/codeviz/i);
+  });
+
+  it('uses Daniel package, script, executable, and workspace names', () => {
+    const metadata = JSON.parse(readFileSync('package.json', 'utf8'));
+    expect(metadata.name).toBe('daniel');
+    expect(metadata.bin).toEqual({ daniel: 'bin/daniel' });
+    expect(metadata.scripts.daniel).toBe('node dist/cli/index.js');
+    expect(metadata.scripts).not.toHaveProperty('codeviz');
+    for (const [directory, name] of [
+      ['cli', '@daniel/cli'],
+      ['packages/core', '@daniel/core'],
+      ['packages/typescript-analyzer', '@daniel/typescript-analyzer'],
+      ['packages/mermaid-renderer', '@daniel/mermaid-renderer'],
+    ]) {
+      expect(JSON.parse(readFileSync(`${directory}/package.json`, 'utf8')).name).toBe(name);
+    }
+  });
+
+  it('does not keep legacy executable or native plugin entry-point files', () => {
+    for (const legacy of ['bin/codeviz', 'nvim/plugin/codeviz.lua', 'nvim/lua/codeviz/init.lua', 'nvim/doc/codeviz.txt']) {
+      expect(existsSync(legacy), `legacy entry point remains: ${legacy}`).toBe(false);
+    }
+  });
+
   it('prints a model for a real on-disk function', () => {
     const run = spawnSync(process.execPath, [cli, 'analyze', `${file}:5:3`], { encoding: 'utf8' });
     expect(run.status, run.stderr).toBe(0);

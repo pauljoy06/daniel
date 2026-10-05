@@ -18,7 +18,7 @@ function M.build(model)
     table.insert(outgoing[edge.from], edge)
   end
   local lines = {
-    ('CodeViz Flow: %s%s'):format(model.entryFunction.name, model.entryFunction.async and ' (async)' or ''),
+    ('Daniel Flow: %s%s'):format(model.entryFunction.name, model.entryFunction.async and ' (async)' or ''),
     ('File: %s'):format(model.entryFunction.source.file),
     '',
   }

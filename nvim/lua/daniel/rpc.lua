@@ -1,4 +1,4 @@
-local util = require('codeviz.util')
+local util = require('daniel.util')
 
 local Client = {}
 Client.__index = Client

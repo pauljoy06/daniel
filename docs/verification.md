@@ -1,4 +1,10 @@
-# Application verification and original-plan checklist
+# Daniel: application verification and original-plan checklist
+
+## Daniel rename verification
+
+The application is named **Daniel**, with root package `daniel` and workspace packages under `@daniel/*`. Its executable is `bin/daniel`, Lua module is `require('daniel')`, and native commands are `:DanielFlow` and `:DanielExportMermaid`. This is a clean rename with no old entry-point aliases. Old names appear only in archived audit evidence and negative tests that ensure the old interfaces are absent.
+
+The rename passed **72 tests across six files**, **10 editor regressions plus the real TS/TSX Neovim workflow**, typechecking, and build. Direct executable invocation, renamed package metadata, new Lua modules/commands, correct repository-root detection, and absence of old executable/plugin entry points are covered. Captured log/status prefixes under `$JCODE_SCRATCH_DIR` are `daniel-rename-typecheck-01`, `daniel-rename-tests-01`, `daniel-rename-build-01`, `daniel-rename-nvim-01`, and `daniel-rename-diff-01`. All inspected command exit statuses were 0.
 
 ## Conclusion
 
@@ -18,7 +24,7 @@ The V1 renderer is an explicit adjacency/card view with labeled outgoing edges, 
 | 6 | Bidirectional navigation, Enter, gd, gr, K | Implemented. Real source jumps/highlighting, imported definition navigation, details, stale protection and refresh tests. `gr` routing is tested with a stub, not an attached real language server. |
 | 7 | Compiler-owned call-definition resolution | Implemented conservatively. Resolved/external/unresolved call sites with reasons and targets. No project-wide recursively expanded call graph. |
 | 8 | Bounded recursive expansion, o/c, depth and cycle limits | Not implemented. |
-| 9 | Sequence view, CodeVizSequence, `<leader>vs` | Not implemented. |
+| 9 | Sequence view, DanielSequence, `<leader>vs` | Not implemented. |
 | 10 | V2 semantic floating-window nodes and canvas | Not implemented. The K details popup is not a V2 node renderer. |
 | 11 | ELK layout and terminal coordinate mapping | Not implemented. |
 | 12 | Deterministic structural/normal/detailed views, +/- | Not implemented. |
@@ -65,7 +71,7 @@ The old 48-test suite passed before new adversarial tests were added. Passing th
 | `npm run test:nvim` | **10 controlled editor regressions passed, plus the real TS/TSX acceptance workflow**, exit 0 | `codeviz-reaudit-nvim-04` |
 | `git diff --check` | Passed, exit 0 | `codeviz-reaudit-diff-03` |
 
-Each evidence prefix has a `.log` containing captured stdout/stderr and a `.status` containing the actual command exit code. The coordinator inspected these files, not just worker completion reports. The earlier nine-case editor acceptance run also passed; the final run added an unsaved external-target case and reran the full native workflow.
+Each evidence prefix has a `.log` containing captured stdout/stderr and a `.status` containing the actual command exit code. Historical evidence filenames retain the naming used when that audit ran. They are archived artifacts, not compatibility entry points. The coordinator inspected these files, not just worker completion reports. The earlier nine-case editor acceptance run also passed; the final run added an unsaved external-target case and reran the full native workflow.
 
 ### Evidence and test boundaries
 

@@ -1,9 +1,9 @@
 {
-  "name": "codeviz",
+  "name": "daniel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "codeviz": "bin/codeviz" },
+  "bin": { "daniel": "bin/daniel" },
   "packageManager": "pnpm@10.18.3",
   "engines": { "node": ">=22" },
   "scripts": {
@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.json && vitest run",
     "test:nvim": "tsc -p tsconfig.json && nvim --headless -u NONE -l nvim/tests/regressions.lua && nvim --headless -u NONE -l nvim/tests/integration.lua",
-    "codeviz": "node dist/cli/index.js"
+    "daniel": "node dist/cli/index.js"
   },
   "dependencies": { "typescript": "^5.9.3" },
   "devDependencies": { "@types/node": "^24.0.0", "vitest": "^3.2.4" }

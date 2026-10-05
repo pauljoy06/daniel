@@ -1,10 +1,10 @@
-local Client = require('codeviz.rpc')
-local render = require('codeviz.render')
-local util = require('codeviz.util')
+local Client = require('daniel.rpc')
+local render = require('daniel.render')
+local util = require('daniel.util')
 
 local M = {}
-local render_ns = vim.api.nvim_create_namespace('codeviz-render')
-local current_ns = vim.api.nvim_create_namespace('codeviz-current')
+local render_ns = vim.api.nvim_create_namespace('daniel-render')
+local current_ns = vim.api.nvim_create_namespace('daniel-current')
 local state = { source_buf = nil, graph_buf = nil, graph_win = nil, model = nil, generation = 0 }
 
 local defaults = {
@@ -62,7 +62,7 @@ local function highlight_node(id)
   local line = state.node_lines and state.node_lines[id]
   if line then
     vim.api.nvim_buf_set_extmark(state.graph_buf, current_ns, line, 0, {
-      line_hl_group = 'CodeVizCurrentNode', priority = 200,
+      line_hl_group = 'DanielCurrentNode', priority = 200,
     })
   end
 end
@@ -179,8 +179,8 @@ local function show_model(model)
     vim.bo[state.graph_buf].buftype = 'nofile'
     vim.bo[state.graph_buf].bufhidden = 'wipe'
     vim.bo[state.graph_buf].swapfile = false
-    vim.bo[state.graph_buf].filetype = 'codeviz'
-    vim.api.nvim_buf_set_name(state.graph_buf, 'CodeViz Flow')
+    vim.bo[state.graph_buf].filetype = 'daniel'
+    vim.api.nvim_buf_set_name(state.graph_buf, 'Daniel Flow')
     set_graph_keymaps(state.graph_buf)
   end
   vim.bo[state.graph_buf].modifiable = true
@@ -190,8 +190,8 @@ local function show_model(model)
   vim.api.nvim_buf_clear_namespace(state.graph_buf, current_ns, 0, -1)
   for id, line in pairs(node_lines) do
     local node = node_by_id(id)
-    vim.api.nvim_buf_add_highlight(state.graph_buf, render_ns, 'CodeVizNode', line, 0, -1)
-    if node and node.kind == 'condition' then vim.api.nvim_buf_add_highlight(state.graph_buf, render_ns, 'CodeVizCondition', line, 0, -1) end
+    vim.api.nvim_buf_add_highlight(state.graph_buf, render_ns, 'DanielNode', line, 0, -1)
+    if node and node.kind == 'condition' then vim.api.nvim_buf_add_highlight(state.graph_buf, render_ns, 'DanielCondition', line, 0, -1) end
   end
   if state.graph_win and vim.api.nvim_win_is_valid(state.graph_win) then vim.api.nvim_set_current_win(state.graph_win) end
 end
@@ -220,7 +220,7 @@ end
 
 function M.open()
   local buf = vim.api.nvim_get_current_buf()
-  if vim.bo[buf].buftype ~= '' then util.notify('open CodeViz from a source buffer', vim.log.levels.ERROR); return end
+  if vim.bo[buf].buftype ~= '' then util.notify('open Daniel from a source buffer', vim.log.levels.ERROR); return end
   if state.source_buf and state.source_buf ~= buf then M.close() end
   state.source_buf = buf
   state.source_cursor = vim.api.nvim_win_get_cursor(0)
@@ -302,12 +302,12 @@ end
 
 function M.setup(options)
   M.config = vim.tbl_deep_extend('force', vim.deepcopy(defaults), options or {})
-  if M.config.keymap then vim.keymap.set('n', M.config.keymap, M.open, { desc = 'CodeViz flow' }) end
+  if M.config.keymap then vim.keymap.set('n', M.config.keymap, M.open, { desc = 'Daniel flow' }) end
 end
 
-vim.api.nvim_set_hl(0, 'CodeVizNode', { default = true, link = 'Title' })
-vim.api.nvim_set_hl(0, 'CodeVizCondition', { default = true, link = 'Conditional' })
-vim.api.nvim_set_hl(0, 'CodeVizCurrentNode', { default = true, link = 'Visual' })
+vim.api.nvim_set_hl(0, 'DanielNode', { default = true, link = 'Title' })
+vim.api.nvim_set_hl(0, 'DanielCondition', { default = true, link = 'Conditional' })
+vim.api.nvim_set_hl(0, 'DanielCurrentNode', { default = true, link = 'Visual' })
 
 vim.api.nvim_create_autocmd('CursorMoved', { callback = sync_from_source })
 vim.api.nvim_create_autocmd('BufWipeout', { callback = function(event)
