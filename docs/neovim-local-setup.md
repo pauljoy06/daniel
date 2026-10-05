@@ -2,6 +2,8 @@
 
 Setup date: October 5, 2026. Local checkout: `/home/paul/repos/daniel`.
 
+The setup steps below are the historical installation record. The installed plugin now uses the [connected visual-flow renderer](visual-flow-verification.md), with `+`/`-` detail controls, `e` exception visibility, and `F`/`f` enclosing-function selection. The existing configuration file is unchanged. Restart Neovim after rebuilding to replace cached Lua modules.
+
 ## Steps executed
 
 1. **Inspected the requirements and existing installation.** Read `README.md`, `nvim/doc/daniel.txt`, the plugin's startup code, and the build scripts. Located Neovim **0.11.6**, Node.js **24.13.0**, and npm **11.6.2**. Daniel's TypeScript dependency and built output already existed. No runtime upgrade, dependency download, global CLI install, or pnpm installation was needed.

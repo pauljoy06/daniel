@@ -4,8 +4,10 @@
 1. Introduction                                                   *daniel*
 
 Daniel asks the repository's TypeScript analyzer for an ExecutionModel and
-shows a textual control-flow graph in a nofile split. Each semantic node shows
-its deterministic node ID, source range, and explicit labeled outgoing edges.
+shows connected orthogonal boxes and labelled arrows in a scrollable nofile
+split. Geometry is display-only and does not alter the ExecutionModel. ASCII
+borders and arrows are Unicode-display-width aware. Crossings are marked x,
+not junctions. Failed layout is explicitly labelled as a card-only fallback.
 Node IDs are not persistent across source edits.
 
 The plugin implements the V1 schema only. It does not provide sequence views,
@@ -42,7 +44,9 @@ analyzer command is:
     Request `exportMermaid` using the same source snapshot and analyzer model.
     With no file, open a nofile Mermaid buffer. Existing files are not overwritten.
     Destinations are fixed at invocation and created exclusively. Exporting a
-    different source does not rebind an open graph. Obsolete export responses,
+    different source does not rebind an open graph. From the graph, export uses
+    its selected region depth and pinned original cursor. From a source buffer,
+    export uses that cursor with depth zero. Obsolete export responses,
     including callbacks arriving after close, are ignored.
 
 ===============================================================================
@@ -53,9 +57,26 @@ analyzer command is:
 <S-Tab>     Select the previous semantic node.
 gd          Jump to a resolved call target, when available.
 gr          Jump to source and invoke LSP references.
-K           Show AST kind, source provenance, limitations and call details.
++ / -       Increase/decrease structural, normal (default), detailed view.
+e           Toggle repetitive conservative exception edges. Header counts hidden
+            edges. Explicit throw, catch and finally paths stay visible.
+[ / ]       Cycle exact members of a safe straight-line basicBlock group.
+F           Analyze the enclosing function, using the original source cursor.
+f           Return to the inner function. Failed parent requests preserve graph.
+K           Show full untruncated labels, AST, exact member ranges and uncertainty.
 r           Refresh from the current unsaved source snapshot.
 q           Close the graph and stop the analyzer job.
+
+Selection tests both row and display column. Tab selection centers the box on
+both axes. Source highlights are restricted to boxes, not whole rows. Labels
+wrap to the viewport (20..48 content cells) and node rectangles are capped at
+160x30 cells, with truncation marked. Terminal and window resizing recompute
+measurements after an 80ms debounce without stealing source-window focus.
+Large multi-branch diagrams remain horizontally scrollable. The region header
+shows basename and exact function range. K includes full source paths. Selected
+group member ID and exact location remain visible in the selection header.
+Calls, decisions, unsupported and abrupt nodes are never grouped. K retains
+full member detail. The graph disables wrap, numbers, folds and cursorline.
 
 Moving the cursor in the source buffer highlights the smallest matching real
 (non-synthetic) node in the graph. Source columns are converted between
@@ -69,8 +90,13 @@ graph buffer even when it is shown in duplicate windows.
 5. Protocol                                                *daniel-protocol*
 
 The analyzer uses JSON-RPC 2.0 messages separated by newlines over stdio.
-`analyze` receives `{file, line, column, sourceText, tsconfig?}` and returns an
-ExecutionModel with `schemaVersion = 1`. Requests time out, stale responses are
+`analyze` receives `{file, line, column, sourceText, tsconfig?, functionDepth}`
+(default depth zero). After analysis Lua measures labels with strdisplaywidth
+and asynchronously requests `layout` with nodes `{id,width,height}` and edges
+`{id,from,to,label?,labelWidth?}`. Layout V1 returns zero-based integer cell
+rectangles and orthogonal point arrays. Right/bottom borders are inclusive.
+Both phases, display toggles, resize and close use generation and snapshot
+checks. The ExecutionModel has `schemaVersion = 1`. Requests time out, stale responses are
 ignored, partial stdout chunks are retained, and pending requests fail if the
 job exits.
 

@@ -4,7 +4,7 @@ Deterministic TypeScript/TSX control-flow analysis with a native Neovim navigati
 
 ## Status
 
-This repository implements the **V1 single-function flow-view milestone**, plus conservative call-definition resolution and Mermaid export. It is an initial static-analysis tool, not a proof that every displayed path is feasible. Sequence views, bounded recursive call expansion, ELK layout, levels of detail, and floating-node renderers remain later milestones.
+This repository implements single-function static control-flow analysis, conservative call-definition resolution, Mermaid export, and a **native connected boxes-and-arrows Neovim diagram**. The diagram uses local ELK layout and terminal-cell rendering, with structural/normal/detailed presentation and explicit exception/uncertainty controls. It is not runtime tracing or a proof that every displayed path is feasible. Sequence views, bounded recursive call expansion, and floating-node/terminal-image renderers remain later milestones.
 
 See [the original-plan checklist and bug re-verification report](docs/verification.md) for the implemented/deferred task breakdown, repaired defects, test results, and remaining acceptance gaps.
 
@@ -47,7 +47,9 @@ require('daniel').setup({
 })
 ```
 
-Generate the local help index with `:helptags /absolute/path/to/daniel/nvim/doc` so `:help daniel` works. Restart Neovim after adding the runtime path, or run `:runtime plugin/daniel.lua`. Open a named TypeScript/TSX source buffer, place the cursor inside a function, and run `:DanielFlow` or `<leader>vf`. A vertical `nofile` split shows semantic node cards with labeled outgoing edges and destination IDs. This intentionally simple V1 renderer is a graph adjacency surface, not yet a spatial node-layout canvas.
+Generate the local help index with `:helptags /absolute/path/to/daniel/nvim/doc` so `:help daniel` works. Restart Neovim after adding the runtime path, or run `:runtime plugin/daniel.lua` for a first install. After updating plugin code, rebuild with `npm run build` and restart Neovim so cached Lua modules and analyzer processes are replaced. Open a named TypeScript/TSX source buffer, place the cursor inside a function, and run `:DanielFlow` or `<leader>vf`. A vertical `nofile` split shows a scrollable diagram of connected boxes and labeled orthogonal arrows. Branches split and rejoin spatially, loops route back, and node selection uses both row and column. No browser, image protocol, remote layout service, or execution of the analyzed application is needed.
+
+The innermost function is selected initially. Anonymous call arguments are identified by context, for example `map callback`, and the header shows their source region. `F` selects an enclosing function and `f` returns toward the innermost function. A `.map()` callback diagram is not a whole-file execution graph.
 
 | Key | Action |
 | --- | --- |
@@ -55,9 +57,17 @@ Generate the local help index with `:helptags /absolute/path/to/daniel/nvim/doc`
 | `Tab` / `Shift-Tab` | Next / previous graph node |
 | `gd` | Jump to a resolved call definition |
 | `gr` | Jump to source and request LSP references, if an LSP is attached |
-| `K` | Show AST kind, provenance, limitations, and call-resolution details |
+| `K` | Show AST kind, exact provenance, group members, limitations, and call-resolution details |
+| `+` / `-` | Increase / decrease detail: structural, normal (default), detailed |
+| `e` | Toggle repetitive conservative exception connectors, with hidden counts in the header |
+| `[` / `]` | Select a constituent node inside a displayed straight-line group |
+| `F` / `f` | Analyze an enclosing function / return toward the innermost function |
 | `r` | Reanalyze the source buffer, including unsaved edits |
 | `q` | Close the graph and stop its analyzer process |
+
+Normal and structural views may group safe straight-line basic blocks for presentation, retaining every member's node ID and exact source range. Decisions, calls, unsupported constructs, and abrupt completions remain distinct. `[`/`]` choose the precise member for navigation, and `K` exposes full metadata. Optional-chain warnings remain visible because those semantics are not implemented yet. Exception simplification hides only selected conservative connectors, not explicit throws or catch/finally structure, and the header states how many edges are hidden. The underlying `ExecutionModel` and Mermaid export are not simplified. The pinned winbar keeps the summary visible while scrolling: `S`/`N`/`D` is the detail level, `e:35h` means 35 exception connectors are hidden, and `?:16` means 16 uncertain nodes/calls. Ordinary unlabeled `next` arrows omit their redundant text in simplified views, while detailed view retains it.
+
+Graph labels wrap for the viewport and long content is visibly truncated with full detail available via `K`. Use ordinary Neovim vertical scrolling and `zh`/`zl` for horizontal scrolling. `Tab` centers the selected node, and `<C-w>|` can give the diagram more width. Very narrow splits can require horizontal scrolling rather than fitting all branches at once. Layout is bounded to 300 nodes, 1500 edges, and two million terminal cells. Layout errors or excessive graph sizes produce an explicitly labeled card fallback with a reason, never a silent claim that layout succeeded.
 
 Moving through source code highlights the smallest corresponding non-synthetic graph node. The plugin translates UTF-16 positions into Neovim byte offsets, including non-BMP characters. Unsaved source contents are sent as an in-memory override; analysis never writes source files. Other project files are read from disk. Graph navigation is refused after the source changes until `r` refreshes it, and responses for obsolete snapshots are discarded.
 
@@ -116,7 +126,7 @@ Start `./bin/daniel serve`. Transport is **newline-delimited UTF-8 JSON-RPC 2.0*
 {"jsonrpc":"2.0","id":1,"method":"analyze","params":{"file":"/project/src/foo.ts","line":52,"column":10}}
 ```
 
-Optional `params.tsconfig` selects a config. Optional `params.sourceText` replaces only the selected file in memory. `exportMermaid` accepts the same parameters and returns a string. Notifications have no reply; numeric, string, and null request IDs are supported. Parse, request, method, parameter, and analysis errors are returned as structured errors. Batch arrays are not supported. Stdout is reserved for protocol messages.
+Optional `params.tsconfig` selects a config. Optional `params.sourceText` replaces only the selected file in memory. Optional `params.functionDepth` (integer 0..64) selects an enclosing implementation, with 0 choosing the innermost one. `exportMermaid` accepts the same parameters and returns a string. The display-only `layout` method accepts measured node dimensions and labeled directed edges, returning integer terminal-cell rectangles and routed polylines. The contract is in `packages/core/diagram.ts`; it is separate from execution semantics. Requests are processed in order, including asynchronous layout and EOF draining. Notifications have no reply; numeric, string, and null request IDs are supported. Parse, request, method, parameter, and analysis errors are returned as structured errors. Batch arrays are not supported. Stdout is reserved for protocol messages.
 
 ## Development and validation
 
@@ -134,6 +144,7 @@ The editor suite also covers controlled callback/lifecycle races, safe exports, 
 packages/core/                 model and protocol contract
 packages/typescript-analyzer/  project loading, function selection, CFG and call resolution
 packages/mermaid-renderer/     export from the same ExecutionModel
+packages/diagram-layout/      local ELK adapter and validated terminal-cell geometry
 cli/                          standalone analyze command and stdio server
 nvim/                         native Lua plugin, help, and headless acceptance test
 fixtures/                     TypeScript fixtures
@@ -142,8 +153,7 @@ tests/                        analyzer and CLI tests
 
 ## Next milestones
 
-1. Exercise the MVP against representative PCF/React projects and expand correctness fixtures before claiming broader language coverage.
+1. Extend representative PCF/React correctness and usability coverage, with optional-chain semantics as the next analyzer priority.
 2. Add bounded call expansion with explicit depth and cycle limits.
 3. Derive sequence/unified execution views from CFG plus resolved calls, not another analysis pipeline.
-4. Introduce ELK layout and a native floating-node renderer while retaining model provenance and navigation.
-5. Add deterministic levels of detail. Optional graphics remain renderer-only experiments.
+4. Explore richer native floating-node presentation if it improves the connected canvas. Optional terminal graphics remain renderer-only experiments.

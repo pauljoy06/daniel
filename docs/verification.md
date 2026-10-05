@@ -8,9 +8,9 @@ The rename passed **72 tests across six files**, **10 editor regressions plus th
 
 ## Conclusion
 
-**The original full application roadmap is not finished.** The delivered scope is the V1 single-function analyzer and native flow/navigation surface, plus conservative call-definition resolution and Mermaid export. Later execution/sequence views and V2 rendering remain unimplemented, not silently counted as complete.
+**The original full application roadmap is not finished.** The delivered scope now includes the single-function analyzer, conservative call-definition resolution, Mermaid export, and the approved **native connected visual-flow phase** with local ELK layout, terminal-cell boxes/arrows, detail levels and preserved navigation. Bounded call expansion, sequence/unified views, and rich floating-node presentation remain separate milestones. See [the visual-flow verification record](visual-flow-verification.md) for current acceptance evidence.
 
-The V1 renderer is an explicit adjacency/card view with labeled outgoing edges, not the spatial branch diagram sketched in the original plan. It has a real native editor workflow, but not graph layout or a floating-node canvas. The compiler API is used directly instead of the suggested ts-morph convenience layer. These are documented implementation choices, not hidden dependencies on an LLM or browser.
+The original V1 renderer was an adjacency/card list. It has now been replaced by a scrollable, connected branch canvas, with the old-style cards used only as an explicitly labeled failure fallback. The approved architecture uses one buffer canvas and details popups, not a floating window for every node. The compiler API remains the semantic authority. Layout is local and presentation-only, with no LLM, browser or analyzed-application execution.
 
 ## Original 14-stage plan
 
@@ -20,14 +20,14 @@ The V1 renderer is an explicit adjacency/card view with labeled outgoing edges, 
 | 2 | Single-function CFG, basic blocks, branches, loops, abrupt completion, exceptions | Implemented within documented syntactic limits. Graph-edge/reachability tests cover ordering and continuation routing. |
 | 3 | Observable correctness, exact provenance, explicit unsupported/dynamic constructs | Implemented. Schema, AST-kind, UTF-16/source-range, deterministic ID and conservative-resolution tests. This is not complete JavaScript semantics. |
 | 4 | Native Neovim flow command and stdio JSON-RPC | Implemented. Real analyzer process and newline transport integration tests. `<leader>vf` is installed when configured through `setup({keymap = '<leader>vf'})`. |
-| 5 | V1 native buffer visualization | Implemented in simplified form. Native nofile split, Unicode cards/edges, highlights and extmarks. A spatial branch canvas and virtual-text edge renderer are not implemented. |
+| 5 | V1 native buffer visualization | Implemented and upgraded. Connected boxes and orthogonal arrows, labeled branches/loops, per-box highlights and two-dimensional selection in a native nofile canvas. |
 | 6 | Bidirectional navigation, Enter, gd, gr, K | Implemented. Real source jumps/highlighting, imported definition navigation, details, stale protection and refresh tests. `gr` routing is tested with a stub, not an attached real language server. |
 | 7 | Compiler-owned call-definition resolution | Implemented conservatively. Resolved/external/unresolved call sites with reasons and targets. No project-wide recursively expanded call graph. |
 | 8 | Bounded recursive expansion, o/c, depth and cycle limits | Not implemented. |
 | 9 | Sequence view, DanielSequence, `<leader>vs` | Not implemented. |
-| 10 | V2 semantic floating-window nodes and canvas | Not implemented. The K details popup is not a V2 node renderer. |
-| 11 | ELK layout and terminal coordinate mapping | Not implemented. |
-| 12 | Deterministic structural/normal/detailed views, +/- | Not implemented. |
+| 10 | V2 semantic floating-window nodes and canvas | Canvas implemented using the approved single-buffer architecture. Per-node floating-window presentation remains deferred. The K details popup is not counted as a floating-node renderer. |
+| 11 | ELK layout and terminal coordinate mapping | Implemented. Local ELKjs 0.12.0, caller-measured cell dimensions, validated integer boxes/routes, deterministic geometry and resource limits. |
+| 12 | Deterministic structural/normal/detailed views, +/- | Implemented. Presentation-only grouping retains member IDs/ranges, with explicit uncertainty and hidden-exception summaries. |
 | 13 | Mermaid export from the same ExecutionModel | Implemented. Built CLI/RPC and native editor export tests. Exclusive file creation prevents overwriting files or symlinks. |
 | 14 | Optional later terminal graphics experiments | Not implemented and explicitly optional/future. |
 
@@ -61,7 +61,7 @@ The old 48-test suite passed before new adversarial tests were added. Passing th
 - Relative export paths were resolved against response-time working directories rather than invocation-time directories.
 - Export overwrite prevention checked file readability and performed a non-atomic write. Exclusive creation now rejects existing files, including dangling symlinks, and avoids the check/write race.
 
-## Verification results
+## Historical pre-visual-phase verification results
 
 | Check | Observed result | Evidence prefix under `$JCODE_SCRATCH_DIR` |
 | --- | --- | --- |
@@ -86,9 +86,9 @@ Each evidence prefix has a `.log` containing captured stdout/stderr and a `.stat
 
 ## Remaining work and trust limits
 
-1. Exercise this milestone on a representative actual PCF/React project and measure graph usefulness and latency. The new TSX fixture is a useful acceptance sample, not this project-level evaluation.
+1. Broaden actual PCF/React acceptance beyond the callback now verified in the user's application. Its measured latency and terminal captures are recorded separately; one function does not certify the entire project.
 2. Implement bounded depth/cycle-limited call expansion, then sequence/unified views from the same model.
-3. Add ELK layout, floating-node rendering and deterministic detail levels.
+3. Explore richer floating-node presentation if it improves usability. ELK layout and deterministic detail levels are now delivered.
 4. Keep extending fixture-based language correctness coverage. Optional chains, generators, class evaluation, resource disposal, spread/tagged templates, labeled jumps and binding defaults remain explicitly opaque in the documented V1 boundary.
 5. Add real attached-LSP navigation acceptance and independent Mermaid-parser coverage if stronger guarantees are needed.
 
