@@ -21,5 +21,7 @@ export function isAnalyzeParams(value: unknown): value is AnalyzeParams {
     && Number.isInteger(params.line) && Number.isInteger(params.column)
     && Number(params.line) > 0 && Number(params.column) > 0
     && (params.tsconfig === undefined || typeof params.tsconfig === 'string')
-    && (params.sourceText === undefined || typeof params.sourceText === 'string');
+    && (params.sourceText === undefined || typeof params.sourceText === 'string')
+    && (params.functionDepth === undefined || (Number.isInteger(params.functionDepth)
+      && Number(params.functionDepth) >= 0 && Number(params.functionDepth) <= 64));
 }

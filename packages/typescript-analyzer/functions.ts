@@ -24,11 +24,22 @@ export function functionInfo(node: ExecutableFunction): FunctionInfo {
   let name = node.name?.getText() ?? (ts.isConstructorDeclaration(node) ? 'constructor' : '<anonymous>');
   if (!node.name && ts.isVariableDeclaration(node.parent)) name = node.parent.name.getText();
   if (!node.name && ts.isPropertyAssignment(node.parent)) name = node.parent.name.getText();
+  if (name === '<anonymous>') {
+    let parent: ts.Node = node.parent;
+    while (ts.isParenthesizedExpression(parent)) parent = parent.parent;
+    if (ts.isCallExpression(parent)) {
+      const callee = parent.expression;
+      const context = ts.isPropertyAccessExpression(callee) ? callee.name.text
+        : ts.isIdentifier(callee) ? callee.text : undefined;
+      if (context) name = `${context} callback`;
+    }
+  }
   return { id: `${source.file}:${source.startLine}:${source.startColumn}`, name, source,
     async: !!node.modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword) };
 }
 
-export function containingFunction(file: ts.SourceFile, line: number, column: number): ExecutableFunction {
+export function containingFunction(file: ts.SourceFile, line: number, column: number, depth = 0): ExecutableFunction {
+  if (!Number.isInteger(depth) || depth < 0 || depth > 64) throw new Error('Function depth must be an integer from 0 to 64');
   const lines = file.getLineStarts();
   if (!Number.isInteger(line) || !Number.isInteger(column) || line < 1 || column < 1 || line > lines.length) {
     throw new Error('Cursor line and column must be valid one-based integer positions');
@@ -39,13 +50,15 @@ export function containingFunction(file: ts.SourceFile, line: number, column: nu
   while (lineEnd > start && /[\r\n\u2028\u2029]/.test(file.text[lineEnd - 1])) lineEnd--;
   if (start + column - 1 > lineEnd) throw new Error('Cursor column is outside the source line');
   const offset = start + column - 1;
-  let result: ExecutableFunction | undefined;
+  const containing: ExecutableFunction[] = [];
   function visit(node: ts.Node): void {
     if (offset < node.getStart(file) || offset >= node.getEnd()) return;
-    if (isExecutableFunction(node) && node.body) result = node;
+    if (isExecutableFunction(node) && node.body) containing.push(node);
     ts.forEachChild(node, visit);
   }
   ts.forEachChild(file, visit);
-  if (!result) throw new Error('Cursor is not inside a function with an implementation');
+  if (!containing.length) throw new Error('Cursor is not inside a function with an implementation');
+  const result = containing[containing.length - 1 - depth];
+  if (!result) throw new Error(`No enclosing function at depth ${depth}; maximum is ${containing.length - 1}`);
   return result;
 }

@@ -74,4 +74,6 @@ export interface AnalyzeParams {
   tsconfig?: string;
   /** An in-memory override for the cursor's file. Disk is never modified. */
   sourceText?: string;
+  /** Zero selects the innermost implementation; larger values select its ancestors. */
+  functionDepth?: number;
 }
