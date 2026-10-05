@@ -27,6 +27,9 @@ Each prefix below has captured `.log` output and an actual `.status` under `/hom
 | Interactive terminal confirmation | `daniel-visual-terminal-04` | Wide/narrow captures collected, exit 0; disposable QA server intentionally cleaned up |
 | Help index | `daniel-visual-help-01` | Exit 0 |
 | Source/config preservation | `daniel-visual-preservation-01` | Actual application file and existing plugin configuration checksums unchanged, exit 0 |
+| Loop-back terminal acceptance | `daniel-visual-loop-check-01` | Installed mapping, real analyzer/layout, upward back edge and arrow assertions, 180 × 120 capture inspected, exit 0 |
+| Final staged whitespace check | `daniel-visual-precommit-02` | Exit 0 |
+| Earlier disposable QA session cleanup | `daniel-visual-qa03-cleanup-02` | Owned QA03 server already absent, exit 0 |
 
 Mechanical execution used **gpt-6-luna at low effort**. Implementation workers followed the configured default and were observed as **gpt-6.1-sol at low effort**. The coordinator inspected raw logs/statuses, selected fixes and controlled reruns.
 
@@ -36,11 +39,13 @@ The selected `.map()` callback in `CreateLegacyReturn.tsx`, lines **1618–1635*
 
 - **39 semantic nodes**, **47 displayed edges**, **35 hidden conservative exception connectors** and **16 uncertain nodes/calls**.
 - A normal-view canvas of **76 × 573 cells**. A tall graph requires vertical scrolling, and very narrow splits can require horizontal scrolling. `Tab` centers a node; `zh`/`zl` and `<C-w>|` are standard Neovim viewport controls.
-- Approximately **3.8–4.0 seconds** to open in the final headless runs. In the inspected detailed timing sample, analysis took about **3.49 seconds**, and layout about **0.43 seconds**. These are measurements of this callback on this machine, not a project-wide performance guarantee.
+- Approximately **3.8–4.0 seconds** to open in the final headless runs. In the latest inspected timing sample (`daniel-visual-real-metrics-03.json`), analysis took about **3.31 seconds**, and layout about **0.44 seconds**. These are measurements of this callback on this machine, not a project-wide performance guarantee.
 
 The installed-configuration probe did not inject a runtime path or call plugin setup. It used the real `,vf` mapping, real analyzer/RPC layout, detail and exception controls, parent/back selection, matching Mermaid export, narrow resize/focus, exact source coordinates, source-to-box highlighting and `q` cleanup. It verified that every routed edge endpoint retained its arrow. Source was read only.
 
 Final terminal captures were inspected at **180 × 55** and **120 × 40**. Files: `daniel-visual-terminal-wide-04.txt` and `daniel-visual-terminal-narrow-04.txt`. Full canvas, excerpt and timing artifacts use `daniel-visual-real-*-03` and `daniel-visual-real-*-terminal-04`. They remain local because the diagram contains application-source labels.
+
+An acceptance re-audit identified that the initial terminal captures showed branches and joins, but not a loop. A separate real installed-plugin capture now closes that gap: `daniel-visual-loop-terminal-01.txt`, at **180 × 120**, shows a scratch `countdown` function, both condition paths, return, exit, and a labeled right-side loop-back route with an upward arrow into the loop header. The real analyzer/layout produced **8 nodes, 8 displayed edges and a 52 × 71-cell layout**. Assertions verify the back-edge identity, upward destination and rendered endpoint arrow. `daniel-visual-loop-metrics-01.json` records the exact route. The source is a synthetic local fixture, but this uses the actual installed mapping, analyzer, RPC and canvas, not stubbed responses. Only the disposable capture server is stopped afterward.
 
 ## Bugs found and repaired
 
@@ -60,6 +65,8 @@ Final terminal captures were inspected at **180 × 55** and **120 × 40**. Files
 Initial typecheck (`typecheck-01`) failed with exit 2. Initial full suite (`tests-01`) had 8 failures and 98 passes, exit 1. These logs were retained, not overwritten by later passes.
 
 Terminal attempts 01 and 02 failed before a ready marker. Attempt 03 produced useful frames, but its completion status was not persisted, so it is **not counted as a passed workflow or normal shutdown**. The final capture runner uses an explicit isolated shell/config and intentionally cleans up its own QA server after frame collection. Normal plugin shutdown is separately verified by the headless installed workflow and editor suite.
+
+The first final-check delegation reported an ambiguous duplicate execution count for `precommit-01`, and `qa03-cleanup-01` failed shell parsing before its log/status files were recorded. These are not treated as reliable final evidence. A new root-authored runner produced independently inspected `precommit-02` and `qa03-cleanup-02` output/statuses, both exit 0. No earlier status was reconstructed or overwritten.
 
 The existing suppressed Dadbod UI dictionary error (`E716`, `collapsed`) is recorded as a known startup baseline. The parent project's missing `pcf-scripts` base-config warning remains nonfatal. Neither unrelated configuration was changed.
 
