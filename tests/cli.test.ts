@@ -65,6 +65,40 @@ describe('built CLI', () => {
 });
 
 describe('newline-framed JSON-RPC', () => {
+  it('lays out built RPC requests, drains EOF, ignores notifications and reports parameter errors', () => {
+    const diagram = { nodes: [{ id: 'a', width: 12, height: 5 }, { id: 'b', width: 12, height: 5 }],
+      edges: [{ id: 'one', from: 'a', to: 'b', label: '界', labelWidth: 2 },
+        { id: 'two', from: 'a', to: 'b' }, { id: 'loop', from: 'b', to: 'b' }] };
+    const messages = [
+      { jsonrpc: '2.0', id: 10, method: 'layout', params: diagram },
+      { jsonrpc: '2.0', method: 'layout', params: diagram },
+      { jsonrpc: '2.0', method: 'layout', params: null },
+      { jsonrpc: '2.0', id: 11, method: 'layout', params: { nodes: [], edges: [{ id: 'bad', from: 'a', to: 'b' }] } },
+      { jsonrpc: '2.0', id: 12, method: 'layout', params: { nodes: Array.from({ length: 301 }, (_, i) => ({ id: `n${i}`, width: 6, height: 3 })), edges: [] } },
+      { jsonrpc: '2.0', id: 13, method: 'analyze', params },
+      { jsonrpc: '2.0', id: 14, method: 'layout', params: diagram },
+    ];
+    const run = spawnSync(process.execPath, [cli, 'serve'], { encoding: 'utf8',
+      input: messages.map(message => JSON.stringify(message)).join('\n') + '\n', timeout: 30000 });
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stderr).toBe('');
+    const replies = run.stdout.trim().split('\n').map(line => JSON.parse(line));
+    expect(replies.map(reply => reply.id)).toEqual([10, 11, 12, 13, 14]);
+    const layout = replies[0].result;
+    expect(layout.schemaVersion).toBe(1);
+    expect(layout.nodes.map((node: { id: string }) => node.id).sort()).toEqual(['a', 'b']);
+    expect(layout.edges.map((edge: { id: string }) => edge.id).sort()).toEqual(['loop', 'one', 'two']);
+    expect(layout.edges.find((edge: { id: string }) => edge.id === 'one').label).toMatchObject({ text: '界', width: 2 });
+    expect(replies[1].error).toMatchObject({ code: -32602, message: expect.stringContaining('unknown node') });
+    expect(replies[2].error.code).toBe(-32002);
+    expect(replies[3].result.entryFunction.name).toBe('saveOrder');
+    const { elapsedMs: firstElapsed, ...first } = layout;
+    const { elapsedMs: secondElapsed, ...second } = replies[4].result;
+    expect(firstElapsed).toBeGreaterThanOrEqual(0);
+    expect(secondElapsed).toBeGreaterThanOrEqual(0);
+    expect(second).toEqual(first);
+  });
+
   it('handles parse errors, bad methods, bad params, notifications, and null IDs', () => {
     const messages = [
       '{bad json',

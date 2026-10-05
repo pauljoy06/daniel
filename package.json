@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "daniel": "bin/daniel" },
+  "bin": {
+    "daniel": "bin/daniel"
+  },
   "packageManager": "pnpm@10.18.3",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -13,6 +17,12 @@
     "test:nvim": "tsc -p tsconfig.json && nvim --headless -u NONE -l nvim/tests/regressions.lua && nvim --headless -u NONE -l nvim/tests/integration.lua",
     "daniel": "node dist/cli/index.js"
   },
-  "dependencies": { "typescript": "^5.9.3" },
-  "devDependencies": { "@types/node": "^24.0.0", "vitest": "^3.2.4" }
+  "dependencies": {
+    "elkjs": "0.12.0",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "vitest": "^3.2.4"
+  }
 }
