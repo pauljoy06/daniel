@@ -2,6 +2,8 @@
 
 Verified October 5, 2026. This implements the approved connected native diagram phase, not the entire application roadmap.
 
+A subsequent [fresh acceptance re-verification](acceptance-reverification.md) reran the complete mapped suite and real public workflows together, including live routing, rename/help, wide/narrow/loop captures and packaging boundaries. The measurements and prefixes below are the initial phase-delivery evidence, not the newest run.
+
 ## Delivered
 
 - Local ELKjs 0.12.0 layout through a separate `layout` RPC. Execution semantics remain in the unchanged `ExecutionModel` contract.
